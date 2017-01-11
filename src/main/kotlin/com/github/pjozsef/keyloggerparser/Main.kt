@@ -10,24 +10,20 @@ fun main(args: Array<String>) {
     val keyEvents = strings.map { KeyEvent.of(it) }
 
     println("Distinct characters:")
-    keyEvents.distinct().subscribe(::println)
+    keyEvents.map { it.char }.distinct().subscribe(::println)
+    println()
 
     val filteredEvents = keyEvents.filter { it.char.matches(Regex("\\w|(period)")) }
     println("Filtered characters:")
     filteredEvents.map { it.char }.distinct().subscribe(::println)
+    println()
 
-    val sortedEvents = sortedKeyEventsObservable(keyEvents)
-    /*val ups: Observable<KeyEvent> = keyEvents.filter { it.type == "up" }
-    val downs: Observable<KeyEvent> = keyEvents.filter { it.type == "down" }
-    val keyPresses = Observable.zip(downs, ups) { down, up ->
-        require(down.char == up.char){"Chars don't match: ${down.char}, ${up.char}"}
-        KeyPress(down.char, up.time - down.time)
-    }
-    keyPresses.subscribe { println("${Math.random()} $it") }*/
-    Observable.zip(keyEvents, sortedEvents) { base, sorted ->
+    val sortedEvents = sortedKeyEventsObservable(filteredEvents)
+    println("After reordering")
+    Observable.zip(filteredEvents, sortedEvents) { base, sorted ->
         "${base.char} - ${sorted.char}"
     }.subscribe(::println)
-
+    println()
 }
 
 fun sortedKeyEventsObservable(keyEvents: Observable<KeyEvent>): Observable<KeyEvent> {
