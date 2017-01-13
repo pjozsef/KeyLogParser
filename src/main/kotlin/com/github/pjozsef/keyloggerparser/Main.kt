@@ -1,88 +1,50 @@
 package com.github.pjozsef.keyloggerparser
 
+import com.github.pjozsef.keyloggerparser.event.KeyEvent
+import com.github.pjozsef.keyloggerparser.measurement.Summary
 import rx.Observable
-import rx.Subscriber
-import java.util.*
+import java.nio.file.Files
+import java.nio.file.Paths
 
 
 fun main(args: Array<String>) {
-    val strings = Observable.just(input).flatMapIterable { it.split("\n") }
-    val keyEvents = strings.map { KeyEvent.of(it) }
+    val start = System.currentTimeMillis()
+    val DWELL_TIME_LIMIT = 250
+    val FLIGHT_TIME_LIMIT = 400
 
-    println("Distinct characters:")
-    keyEvents.map { it.char }.distinct().subscribe(::println)
-    println()
+    val content = String(Files.readAllBytes(Paths.get(args[0])))
+    Summary.of(content, DWELL_TIME_LIMIT, FLIGHT_TIME_LIMIT).subscribe {
+        println(it.dwellStatistics.mean)
+        println(it.dwellStatistics.standardDeviation)
+        val stat = it.dwellStatistics
+        val distribution = it.dwellDistribution
+        println(distribution.cumulativeProbability(stat.mean+stat.standardDeviation))
+        println((distribution.cumulativeProbability(86.72129926339217))*200)
+        println((1-distribution.cumulativeProbability(106.72129926339217))*200)
+        println((1-distribution.cumulativeProbability(120.0))*200)
+        println((1-distribution.cumulativeProbability(150.0))*200)
 
-    val filteredEvents = keyEvents.filter { it.char.matches(Regex("\\w|(period)")) }
-    println("Filtered characters:")
-    filteredEvents.map { it.char }.distinct().subscribe(::println)
-    println()
-
-    val sortedEvents = sortedKeyEventsObservable(filteredEvents)
-    println("After reordering")
-    Observable.zip(filteredEvents, sortedEvents) { base, sorted ->
-        "${base.char} - ${sorted.char}"
-    }.subscribe(::println)
-    println()
-}
-
-fun sortedKeyEventsObservable(keyEvents: Observable<KeyEvent>): Observable<KeyEvent> {
-    val obs = Observable.create(object : Observable.OnSubscribe<KeyEvent> {
-        private val map: MutableMap<String, KeyEvent> = HashMap()
-
-        override fun call(subscriber: Subscriber<in KeyEvent>) {
-            keyEvents.subscribe(
-                    { keyEvent ->
-                        try {
-                            when (keyEvent.type) {
-                                "down" -> {
-                                    handleDownEvent(keyEvent)
-                                }
-                                "up" -> {
-                                    handleUpEvent(keyEvent, subscriber)
-                                }
-                            }
-                        } catch (ex: Exception) {
-                            subscriber.onError(ex)
-                        }
-                    },
-                    { error -> subscriber.onError(error) },
-                    { subscriber.onCompleted() }
-            )
-        }
-
-        private fun handleDownEvent(downEvent: KeyEvent) {
-            map[downEvent.char]?.let {
-                error("Two 'down' events without an 'up' event in between! $downEvent")
-            } ?: let {
-                map[downEvent.char] = downEvent
-            }
-        }
-
-        private fun handleUpEvent(upEvent: KeyEvent, subscriber: Subscriber<in KeyEvent>) {
-            map[upEvent.char]?.let { downEvent ->
-                map.remove(downEvent.char)
-                subscriber.onNext(downEvent)
-                subscriber.onNext(upEvent)
-            } ?: let {
-                error("'Up' event without preceeding 'down' event! $upEvent")
-            }
-        }
-
-    })
-    return obs
-}
-
-data class KeyEvent(val type: String, val time: Long, val char: String) {
-    companion object {
-        fun of(raw: String): KeyEvent {
-            val split = raw.split(" ")
-            return KeyEvent(split[0], split[1].toLong(), split[3])
-        }
+        println(it)
+        //println(it.dwellDistribution.)
     }
+    println("Finished within ${(System.currentTimeMillis()-start)/1000} seconds")
 }
 
-data class KeyPress(val char: String, val time: Long)
+private fun printFilteredDistinct(filteredEvents: Observable<KeyEvent>) {
+    println("Filtered characters:")
+    filteredEvents.map { it.char }.distinct().subscribe(::println, Throwable::printStackTrace)
+    println()
+}
+
+private fun printDistinct(keyEvents: Observable<KeyEvent>) {
+    println("Distinct characters:")
+    keyEvents
+            .map { it.char }
+            .distinct()
+            .subscribe(
+                    ::println,
+                    Throwable::printStackTrace)
+}
 
 val input = """down 1471380337237 110 n
 down 1471380337286 101 e
